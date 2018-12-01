@@ -31,8 +31,6 @@ type Document struct {
 
 type DocumentPreview struct {
 	Title       string
-	Description string
-	Images      []string
 	Link        string
 }
 
@@ -157,12 +155,10 @@ func convertUTF8(content io.Reader, contentType string) (bytes.Buffer, error) {
 
 func (scraper *Scraper) parseDocument(doc *Document) error {
 	t := html.NewTokenizer(&doc.Body)
-	var ogImage bool
 	var headPassed bool
 	var hasFragment bool
 	var hasCanonical bool
 	var canonicalUrl *url.URL
-	doc.Preview.Images = []string{}
 	// saves previews' link in case that <link rel="canonical"> is found after <meta property="og:url">
 	link := doc.Preview.Link
 	for {
@@ -223,29 +219,6 @@ func (scraper *Scraper) parseDocument(doc *Document) error {
 			switch cleanStr(property) {
 			case "og:title":
 				doc.Preview.Title = content
-			case "og:description":
-				doc.Preview.Description = content
-			case "description":
-				if len(doc.Preview.Description) == 0 {
-					doc.Preview.Description = content
-				}
-			case "og:url":
-				doc.Preview.Link = content
-			case "og:image":
-				ogImage = true
-				ogImgUrl, err := url.Parse(content)
-				if err != nil {
-					return err
-				}
-				if !ogImgUrl.IsAbs() {
-					ogImgUrl, err = url.Parse(fmt.Sprintf("%s://%s%s", scraper.Url.Scheme, scraper.Url.Host, ogImgUrl.Path))
-					if err != nil {
-						return err
-					}
-				}
-
-				doc.Preview.Images = []string{ogImgUrl.String()}
-
 			}
 
 		case "title":
@@ -257,21 +230,6 @@ func (scraper *Scraper) parseDocument(doc *Document) error {
 				}
 			}
 
-		case "img":
-			for _, attr := range token.Attr {
-				if cleanStr(attr.Key) == "src" {
-					imgUrl, err := url.Parse(attr.Val)
-					if err != nil {
-						return err
-					}
-					if !imgUrl.IsAbs() {
-						doc.Preview.Images = append(doc.Preview.Images, fmt.Sprintf("%s://%s%s", scraper.Url.Scheme, scraper.Url.Host, imgUrl.Path))
-					} else {
-						doc.Preview.Images = append(doc.Preview.Images, attr.Val)
-					}
-
-				}
-			}
 		}
 
 		if hasCanonical && headPassed && scraper.MaxRedirect > 0 {
@@ -302,7 +260,7 @@ func (scraper *Scraper) parseDocument(doc *Document) error {
 			return scraper.parseDocument(doc)
 		}
 
-		if len(doc.Preview.Title) > 0 && len(doc.Preview.Description) > 0 && ogImage && headPassed {
+		if len(doc.Preview.Title) > 0 && headPassed {
 			return nil
 		}
 
